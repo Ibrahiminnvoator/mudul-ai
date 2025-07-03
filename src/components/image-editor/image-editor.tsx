@@ -287,6 +287,7 @@ export default function ImageEditor() {
 
   if (status === "SUCCESS" && uploadedFile && processedImageUrl) {
     return (
+      // Container for BeforeAfterSlider and buttons doesn't need its own card/shadow if BeforeAfterSlider is styled
       <div className="w-full max-w-4xl">
         <BeforeAfterSlider
           before={
@@ -321,7 +322,7 @@ export default function ImageEditor() {
   }
 
   return (
-    <div className="w-full max-w-4xl rounded-xl bg-card p-4 shadow-lg md:p-8">
+    <div className="w-full max-w-4xl rounded-lg bg-card p-4 md:p-8"> {/* Changed rounded-xl to rounded-lg, removed shadow-lg */}
       {status === "IDLE" || status === "VALIDATING" ? (
         <DragDropUpload
           onFileSelect={handleFileSelect}
