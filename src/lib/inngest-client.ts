@@ -1,8 +1,7 @@
 "use server"
 
 import { Inngest } from "inngest"
-import { geminiClient } from "./gemini-client"
-
+import { geminiClient } from "@/lib/gemini-client"
 /**
  * @description
  * This file configures the Inngest client and defines the background functions

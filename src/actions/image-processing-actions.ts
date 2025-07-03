@@ -20,19 +20,18 @@ import {
  * This action does not perform the editing itself but offloads it to a background worker.
  *
  * @param {ProcessImageRequest} request - The request containing the base64 image data, MIME type, and user prompt.
- * @returns {Promise<ActionState<ProcessImageResponse>>} - An ActionState object containing the job ID if successful.
+ * @returns {Promise<ActionState<ProcessImageResponse>>} - An ActionState object containing the job ID (run ID) if successful.
  */
 export async function processImageAction(
   request: ProcessImageRequest
 ): Promise<ActionState<ProcessImageResponse>> {
   try {
-    // Basic validation to ensure all required data is present.
     if (!request.imageData || !request.prompt || !request.mimeType) {
       return { isSuccess: false, message: "بيانات الطلب غير كاملة." }
     }
 
-    // Dispatch the 'image.process' event to Inngest.
-    // Inngest will pick this up and execute the corresponding background function.
+    // The 'ids' array contains the unique run ID for this specific event trigger.
+    // This is the ID we will use for polling the job's status.
     const { ids } = await inngest.send({
       name: "image.process",
       data: {
@@ -42,17 +41,17 @@ export async function processImageAction(
       }
     })
 
-    const jobId = ids[0]
-    if (!jobId) {
-      throw new Error("Failed to dispatch job to Inngest.")
+    const runId = ids[0]
+    if (!runId) {
+      throw new Error("Failed to dispatch job to Inngest or received no run ID.")
     }
 
     return {
       isSuccess: true,
       message: "تم بدء معالجة الصورة بنجاح.",
       data: {
-        jobId: jobId,
-        estimatedTime: 60 // Provide a static estimate in seconds.
+        jobId: runId, // We use the runId as the jobId for polling
+        estimatedTime: 60
       }
     }
   } catch (error) {
@@ -65,47 +64,63 @@ export async function processImageAction(
 }
 
 /**
- * Retrieves the status of a specific image processing job from Inngest.
- * This is used for polling from the client to update the UI.
+ * Retrieves the status of a specific image processing job run from Inngest's Platform API.
+ * This function now makes a direct, authenticated GET request to the Inngest API.
  *
- * @param {string} jobId - The ID of the job to check.
- * @returns {Promise<ActionState<ProcessingStatusResponse>>} - The current status of the job, including the result or error if completed/failed.
+ * @param {string} runId - The ID of the job run to check.
+ * @returns {Promise<ActionState<ProcessingStatusResponse>>} - The current status of the job.
  */
 export async function getProcessingStatusAction(
-  jobId: string
+  runId: string
 ): Promise<ActionState<ProcessingStatusResponse>> {
   try {
-    const job = await inngest.jobs.get(jobId)
-
-    if (!job) {
-      return { isSuccess: false, message: "لم يتم العثور على المهمة." }
+    const apiKey = process.env.INNGEST_API_KEY
+    if (!apiKey) {
+      throw new Error("INNGEST_API_KEY is not configured on the server.")
     }
 
-    // Map Inngest's internal status to our application-specific status enum.
-    let status: ProcessingStatusResponse["status"] = "PENDING"
-    if (job.status === "completed") status = "COMPLETED"
-    else if (job.status === "failed") status = "FAILED"
-    else if (job.status === "running") status = "PROCESSING"
+    // Fetch the job run status directly from the Inngest Platform API.
+    const response = await fetch(`https://api.inngest.com/v1/runs/${runId}`, {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`
+      }
+    })
 
-    const jobError =
-      job.status === "failed"
-        ? (job.data.event.data as any)?.error?.message ||
-          "فشل غير معروف في المهمة."
-        : undefined
+    if (!response.ok) {
+      const errorBody = await response.text()
+      console.error(
+        `Failed to fetch job status from Inngest API. Status: ${response.status}`,
+        errorBody
+      )
+      return {
+        isSuccess: false,
+        message: `فشل في الحصول على حالة المهمة من Inngest (Code: ${response.status}).`
+      }
+    }
+
+    const jobRun = await response.json()
+
+    // Map Inngest API status to our application's status enum.
+    let status: ProcessingStatusResponse["status"] = "PENDING"
+    if (jobRun.status === "completed") status = "COMPLETED"
+    else if (jobRun.status === "failed") status = "FAILED"
+    else if (jobRun.status === "running") status = "PROCESSING"
 
     return {
       isSuccess: true,
       message: "تم استرداد حالة المهمة بنجاح.",
       data: {
         status,
-        // The result of a successful job is in the `output` property.
-        // Our Inngest function returns { event, body }, so we need job.output.body
-        result: job.output?.body,
-        error: jobError
+        // For completed jobs, the result is in the `output` property.
+        result: jobRun.output,
+        // For failed jobs, the error message is in the `error` property.
+        error: jobRun.error?.message || undefined
       }
     }
   } catch (error) {
-    console.error(`Error getting job status for job ID ${jobId}:`, error)
+    console.error(`Error getting job status for run ID ${runId}:`, error)
     return { isSuccess: false, message: "فشل في الحصول على حالة المعالجة." }
   }
 }

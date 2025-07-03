@@ -1,12 +1,16 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useReducer, useEffect, useRef } from "react"
 import Image from "next/image"
 import { toast } from "sonner"
-import { X, Zap, Hourglass, AlertTriangle, Download } from "lucide-react"
+import { X, Zap, Download, AlertTriangle } from "lucide-react"
 import { ReactCompareSliderImage } from "react-compare-slider"
 
-import { UploadedFile, ProcessingStatus } from "@/types"
+import {
+  UploadedFile,
+  ImageEditorState,
+  ImageEditorAction
+} from "@/types"
 import {
   processImageAction,
   getProcessingStatusAction
@@ -22,19 +26,17 @@ import ProcessingProgress from "@/components/progress/processing-progress"
 
 /**
  * @description
- * This is the core client component for the image editor, now with integrated
- * PostHog analytics tracking. It manages the entire user workflow and sends
- * events at key interaction points.
+ * This is the core client component for the image editor, now refactored to use
+ * a `useReducer` hook for robust state management. It handles the entire user
+ * workflow from file upload to final image download and tracks key events
+ * using PostHog for analytics.
  *
  * Key features:
+ * - Centralized state management using a reducer for predictable state transitions.
  * - Tracks page views, file uploads, validation errors, and edit requests with PostHog.
  * - Integrates server-side validation via `validateFileAction`.
- * - Manages state for the entire editing process.
- * - Renders the `ProcessingProgress` component during background job execution.
- * - Polls for job status updates.
- *
- * @dependencies
- * - @/lib/posthog: The initialized PostHog client for analytics.
+ * - Renders different UI views based on the current state (upload, ready, processing, success, error).
+ * - Polls for background job status updates and updates the state accordingly.
  */
 
 // Helper to convert file to base64, removing the data URL prefix.
@@ -44,20 +46,90 @@ const toBase64 = (file: File): Promise<string> =>
     reader.readAsDataURL(file)
     reader.onload = () => {
       const result = reader.result as string
+      // Return only the base64 part
       resolve(result.split(",")[1])
     }
     reader.onerror = reject
   })
 
-export default function ImageEditor() {
-  const [uploadedFile, setUploadedFile] = useState<UploadedFile | null>(null)
-  const [prompt, setPrompt] = useState("")
-  const [jobId, setJobId] = useState<string | null>(null)
-  const [status, setStatus] = useState<ProcessingStatus>("PENDING")
-  const [processedImageUrl, setProcessedImageUrl] = useState<string | null>(null)
-  const [error, setError] = useState<string | null>(null)
+const initialState: ImageEditorState = {
+  status: "IDLE",
+  uploadedFile: null,
+  prompt: "",
+  jobId: null,
+  processedImageUrl: null,
+  error: null
+}
 
-  const pollingRef = useRef<NodeJS.Timeout>()
+function imageEditorReducer(
+  state: ImageEditorState,
+  action: ImageEditorAction
+): ImageEditorState {
+  switch (action.type) {
+    case "VALIDATION_STARTED":
+      return { ...initialState, status: "VALIDATING" }
+    case "VALIDATION_SUCCESS":
+      return {
+        ...state,
+        status: "READY",
+        error: null,
+        uploadedFile: {
+          file: action.payload.file,
+          preview: URL.createObjectURL(action.payload.file),
+          errors: []
+        }
+      }
+    case "VALIDATION_FAILURE":
+      return {
+        ...state,
+        status: "IDLE",
+        error: action.payload.error
+      }
+    case "SET_PROMPT":
+      return {
+        ...state,
+        prompt: action.payload.prompt
+      }
+    case "PROCESS_IMAGE_STARTED":
+      return {
+        ...state,
+        status: "PROCESSING",
+        error: null,
+        jobId: null
+      }
+    case "PROCESS_IMAGE_DISPATCH_SUCCESS":
+      return {
+        ...state,
+        jobId: action.payload.jobId
+      }
+    case "PROCESS_IMAGE_POLLING_SUCCESS":
+      return {
+        ...state,
+        status: "SUCCESS",
+        processedImageUrl: action.payload.imageUrl,
+        jobId: null
+      }
+    case "PROCESS_IMAGE_FAILURE":
+      return {
+        ...state,
+        status: "ERROR",
+        error: action.payload.error,
+        jobId: null
+      }
+    case "RESET":
+      // Clean up the object URL before resetting
+      if (state.uploadedFile?.preview) {
+        URL.revokeObjectURL(state.uploadedFile.preview)
+      }
+      return initialState
+    default:
+      return state
+  }
+}
+
+export default function ImageEditor() {
+  const [state, dispatch] = useReducer(imageEditorReducer, initialState)
+  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const processingStartRef = useRef<number | null>(null)
 
   // Track page view on component mount
@@ -65,30 +137,8 @@ export default function ImageEditor() {
     posthog.capture("page_view", { page: "image_editor" })
   }, [])
 
-  const resetState = () => {
-    if (pollingRef.current) {
-      clearInterval(pollingRef.current)
-    }
-    processingStartRef.current = null
-    setUploadedFile(null)
-    setPrompt("")
-    setJobId(null)
-    setStatus("PENDING")
-    setProcessedImageUrl(null)
-    setError(null)
-  }
-
-  const handleRemoveImage = () => {
-    if (uploadedFile?.preview) {
-      URL.revokeObjectURL(uploadedFile.preview)
-    }
-    resetState()
-  }
-
   const handleFileSelect = async (file: File) => {
-    resetState()
-    setError(null)
-
+    dispatch({ type: "VALIDATION_STARTED" })
     posthog.capture("file_upload_started", {
       file_size: file.size,
       file_type: file.type
@@ -100,8 +150,7 @@ export default function ImageEditor() {
     const result = await validateFileAction(formData)
 
     if (!result.isSuccess) {
-      setError(result.message)
-      setUploadedFile(null)
+      dispatch({ type: "VALIDATION_FAILURE", payload: { error: result.message } })
       posthog.capture("validation_error", {
         error_type: result.message.includes("حجم") ? "file_size" : "file_type",
         error_message: result.message,
@@ -116,51 +165,42 @@ export default function ImageEditor() {
       file_type: result.data.fileType,
       validation_status: "success"
     })
-
-    setUploadedFile({
-      file,
-      preview: URL.createObjectURL(file),
-      errors: []
-    })
+    dispatch({ type: "VALIDATION_SUCCESS", payload: { file } })
   }
 
   const handleProcessImage = async () => {
-    if (!uploadedFile || !prompt) {
+    if (!state.uploadedFile || !state.prompt) {
       toast.error("خطأ", {
         description: "يرجى تحميل صورة وإدخال طلب تعديل."
       })
       return
     }
 
-    setStatus("PROCESSING")
-    setError(null)
+    dispatch({ type: "PROCESS_IMAGE_STARTED" })
     processingStartRef.current = Date.now()
-
     posthog.capture("edit_request_initiated", {
-      prompt_length: prompt.length,
-      image_size: uploadedFile.file.size
+      prompt_length: state.prompt.length,
+      image_size: state.uploadedFile.file.size
     })
-
     toast.loading("جاري بدء المعالجة...", {
       description: "سيتم تحويل الصورة إلى الخادم الآن."
     })
 
     try {
-      const imageData = await toBase64(uploadedFile.file)
+      const imageData = await toBase64(state.uploadedFile.file)
       const result = await processImageAction({
         imageData,
-        mimeType: uploadedFile.file.type,
-        prompt
+        mimeType: state.uploadedFile.file.type,
+        prompt: state.prompt
       })
 
       if (result.isSuccess) {
-        setJobId(result.data.jobId)
+        dispatch({ type: "PROCESS_IMAGE_DISPATCH_SUCCESS", payload: { jobId: result.data.jobId } })
         toast.success("بدأت المعالجة بنجاح!", {
           description: `جاري التحقق من حالة المعالجة...`
         })
       } else {
-        setStatus("FAILED")
-        setError(result.message)
+        dispatch({ type: "PROCESS_IMAGE_FAILURE", payload: { error: result.message } })
         posthog.capture("edit_request_completed", {
           status: "failed",
           error_type: "dispatch_error",
@@ -169,21 +209,21 @@ export default function ImageEditor() {
         toast.error("فشل", { description: result.message })
       }
     } catch (e: any) {
-      setStatus("FAILED")
-      setError(e.message)
+      const error = "حدث خطأ فادح أثناء تحضير الصورة."
+      dispatch({ type: "PROCESS_IMAGE_FAILURE", payload: { error } })
       posthog.capture("edit_request_completed", {
         status: "failed",
         error_type: "client_error",
         error_message: e.message
       })
-      toast.error("حدث خطأ فادح", { description: e.message })
+      toast.error(error, { description: e.message })
     }
   }
 
   useEffect(() => {
-    if (jobId && status === "PROCESSING") {
+    if (state.jobId && state.status === "PROCESSING") {
       pollingRef.current = setInterval(async () => {
-        const statusResult = await getProcessingStatusAction(jobId)
+        const statusResult = await getProcessingStatusAction(state.jobId as string)
         const duration = Date.now() - (processingStartRef.current || Date.now())
 
         if (statusResult.isSuccess) {
@@ -194,43 +234,43 @@ export default function ImageEditor() {
           } = statusResult.data
 
           if (newStatus === "COMPLETED") {
-            clearInterval(pollingRef.current)
-            setStatus("COMPLETED")
+            if (pollingRef.current) clearInterval(pollingRef.current)
             const { imageData, mimeType } = result
-            setProcessedImageUrl(`data:${mimeType};base64,${imageData}`)
+            const imageUrl = `data:${mimeType};base64,${imageData}`
+            dispatch({ type: "PROCESS_IMAGE_POLLING_SUCCESS", payload: { imageUrl } })
             posthog.capture("edit_request_completed", {
               status: "success",
               processing_duration_ms: duration,
-              job_id: jobId
+              job_id: state.jobId
             })
             toast.success("اكتمل التعديل!", {
               description: "صورتك الجديدة جاهزة للمعاينة."
             })
           } else if (newStatus === "FAILED") {
-            clearInterval(pollingRef.current)
-            setStatus("FAILED")
-            setError(jobError || "فشل غير معروف في المهمة.")
+            if (pollingRef.current) clearInterval(pollingRef.current)
+            const error = jobError || "فشل غير معروف في المهمة."
+            dispatch({ type: "PROCESS_IMAGE_FAILURE", payload: { error } })
             posthog.capture("edit_request_completed", {
               status: "failed",
               error_type: "processing_error",
-              error_message: jobError,
+              error_message: error,
               processing_duration_ms: duration,
-              job_id: jobId
+              job_id: state.jobId
             })
-            toast.error("فشلت المعالجة", { description: jobError })
+            toast.error("فشلت المعالجة", { description: error })
           }
         } else {
-          clearInterval(pollingRef.current)
-          setStatus("FAILED")
-          setError(statusResult.message)
+          if (pollingRef.current) clearInterval(pollingRef.current)
+          const error = statusResult.message
+          dispatch({ type: "PROCESS_IMAGE_FAILURE", payload: { error } })
           posthog.capture("edit_request_completed", {
             status: "failed",
             error_type: "polling_error",
-            error_message: statusResult.message,
+            error_message: error,
             processing_duration_ms: duration,
-            job_id: jobId
+            job_id: state.jobId
           })
-          toast.error("خطأ في التحقق", { description: statusResult.message })
+          toast.error("خطأ في التحقق", { description: error })
         }
       }, 5000)
     }
@@ -240,13 +280,12 @@ export default function ImageEditor() {
         clearInterval(pollingRef.current)
       }
     }
-  }, [jobId, status])
+  }, [state.jobId, state.status])
 
-  const isLoading = status === "PROCESSING"
-  const isFinished = status === "COMPLETED"
-  const isFailed = status === "FAILED"
+  const isLoading = state.status === "VALIDATING" || state.status === "PROCESSING"
+  const { uploadedFile, processedImageUrl, status, prompt, error } = state
 
-  if (isFinished && uploadedFile && processedImageUrl) {
+  if (status === "SUCCESS" && uploadedFile && processedImageUrl) {
     return (
       <div className="w-full max-w-4xl">
         <BeforeAfterSlider
@@ -264,7 +303,7 @@ export default function ImageEditor() {
           }
         />
         <div className="mt-4 flex flex-col items-center gap-4 sm:flex-row sm:justify-center">
-          <Button onClick={handleRemoveImage} variant="outline" size="lg">
+          <Button onClick={() => dispatch({ type: 'RESET' })} variant="outline" size="lg">
             البدء من جديد
           </Button>
           <Button asChild size="lg">
@@ -283,7 +322,7 @@ export default function ImageEditor() {
 
   return (
     <div className="w-full max-w-4xl rounded-xl bg-card p-4 shadow-lg md:p-8">
-      {!uploadedFile ? (
+      {status === "IDLE" || status === "VALIDATING" ? (
         <DragDropUpload
           onFileSelect={handleFileSelect}
           isLoading={isLoading}
@@ -291,84 +330,95 @@ export default function ImageEditor() {
         />
       ) : (
         <div className="grid grid-cols-1 gap-8 md:grid-cols-2">
-          <div className="relative aspect-square w-full overflow-hidden rounded-lg border">
-            <Image
-              src={uploadedFile.preview}
-              alt="Preview"
-              fill
-              className="object-contain"
-            />
-            <Button
-              variant="destructive"
-              size="icon"
-              className="absolute right-2 top-2 z-10 h-8 w-8 rounded-full"
-              onClick={handleRemoveImage}
-              aria-label="إزالة الصورة"
-              disabled={isLoading}
-            >
-              <X className="h-4 w-4" />
-            </Button>
-            {isFailed && (
-              <div className="absolute inset-0 flex flex-col items-center justify-center bg-destructive/80">
-                <AlertTriangle className="h-10 w-10 text-destructive-foreground" />
-                <p className="mt-4 text-center font-cairo text-lg text-destructive-foreground">
-                  فشلت المعالجة
-                </p>
-                <Button
-                  onClick={handleProcessImage}
-                  className="mt-4"
-                  variant="secondary"
-                >
-                  حاول مرة أخرى
-                </Button>
-              </div>
-            )}
-          </div>
+          {uploadedFile && (
+            <div className="relative aspect-square w-full overflow-hidden rounded-lg border">
+              <Image
+                src={uploadedFile.preview}
+                alt="Preview"
+                fill
+                className="object-contain"
+              />
+              <Button
+                variant="destructive"
+                size="icon"
+                className="absolute right-2 top-2 z-10 h-8 w-8 rounded-full"
+                onClick={() => dispatch({ type: 'RESET' })}
+                aria-label="إزالة الصورة"
+                disabled={isLoading}
+              >
+                <X className="h-4 w-4" />
+              </Button>
+              {status === "ERROR" && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center bg-destructive/80 p-4">
+                  <AlertTriangle className="h-10 w-10 text-destructive-foreground" />
+                  <p className="mt-4 text-center font-cairo text-lg text-destructive-foreground">
+                    فشلت المعالجة
+                  </p>
+                  <Button
+                    onClick={handleProcessImage}
+                    className="mt-4"
+                    variant="secondary"
+                  >
+                    حاول مرة أخرى
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="flex flex-col justify-center">
-            {isLoading ? (
+            {status === "PROCESSING" ? (
               <ProcessingProgress />
             ) : (
-              <div className="space-y-6">
-                <div>
-                  <h3 className="font-cairo text-xl font-bold">
-                    صورتك جاهزة للتعديل
-                  </h3>
-                  <p className="text-sm text-muted-foreground">
-                    {uploadedFile.file.name} (
-                    {formatBytes(uploadedFile.file.size)})
-                  </p>
-                </div>
+              uploadedFile && (
+                <div className="space-y-6">
+                  <div>
+                    <h3 className="font-cairo text-xl font-bold">
+                      صورتك جاهزة للتعديل
+                    </h3>
+                    <p className="text-sm text-muted-foreground">
+                      {uploadedFile.file.name} (
+                      {formatBytes(uploadedFile.file.size)})
+                    </p>
+                  </div>
 
-                <div className="space-y-2">
-                  <label
-                    htmlFor="prompt"
-                    className="font-cairo text-base font-semibold"
+                  <div className="space-y-2">
+                    <label
+                      htmlFor="prompt"
+                      className="font-cairo text-base font-semibold"
+                    >
+                      أدخل طلب التعديل (باللغة الإنجليزية)
+                    </label>
+                    <textarea
+                      id="prompt"
+                      value={prompt}
+                      onChange={e =>
+                        dispatch({
+                          type: "SET_PROMPT",
+                          payload: { prompt: e.target.value }
+                        })
+                      }
+                      placeholder="e.g., 'remove the person in the background' or 'make the sky look like a van gogh painting'"
+                      className="w-full resize-none rounded-md border bg-transparent p-2 text-left"
+                      rows={3}
+                      dir="ltr"
+                      disabled={isLoading}
+                    />
+                  </div>
+
+                  <Button
+                    onClick={handleProcessImage}
+                    disabled={isLoading || !prompt.trim()}
+                    size="lg"
                   >
-                    أدخل طلب التعديل (باللغة الإنجليزية)
-                  </label>
-                  <textarea
-                    id="prompt"
-                    value={prompt}
-                    onChange={e => setPrompt(e.target.value)}
-                    placeholder="e.g., 'remove the person in the background' or 'make the sky look like a van gogh painting'"
-                    className="w-full resize-none rounded-md border bg-transparent p-2 text-left"
-                    rows={3}
-                    dir="ltr"
-                    disabled={isLoading}
-                  />
+                    <Zap className="ml-2 h-4 w-4" />
+                    ابدأ التعديل
+                  </Button>
+                  {error && status === "ERROR" && (
+                    <p className="text-sm text-destructive">{error}</p>
+                  )}
                 </div>
-
-                <Button
-                  onClick={handleProcessImage}
-                  disabled={isLoading || !prompt.trim()}
-                  size="lg"
-                >
-                  <Zap className="ml-2 h-4 w-4" />
-                  ابدأ التعديل
-                </Button>
-                {error && <p className="text-sm text-destructive">{error}</p>}
-              </div>
+              )
             )}
           </div>
         </div>
