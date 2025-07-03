@@ -29,7 +29,7 @@ export default async function EditorPage() {
 
         <Suspense
           fallback={
-            <div className="h-64 w-full max-w-4xl animate-pulse rounded-xl bg-card"></div>
+            <div className="h-64 w-full max-w-4xl animate-pulse rounded-lg bg-card"></div> /* Changed rounded-xl to rounded-lg */
           }
         >
           <ImageEditor />

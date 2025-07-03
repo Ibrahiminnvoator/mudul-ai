@@ -25,7 +25,7 @@ import { Hourglass } from "lucide-react"
 export default function ProcessingProgress() {
   return (
     <div
-      className="flex w-full flex-col items-center justify-center space-y-4 rounded-xl border bg-card p-8 shadow-sm"
+      className="flex w-full flex-col items-center justify-center space-y-4 rounded-lg border bg-card p-8" // Changed rounded-xl to rounded-lg, removed shadow-sm
       aria-live="polite"
       role="status"
     >

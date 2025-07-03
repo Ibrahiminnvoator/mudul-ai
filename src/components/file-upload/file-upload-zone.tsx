@@ -59,8 +59,8 @@ export default function FileUploadZone({
     <div
       {...getRootProps()}
       className={cn(
-        "group relative flex cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed border-muted-foreground/30 bg-background/20 p-8 text-center transition-colors duration-200 ease-in-out",
-        { "border-primary bg-primary/10": isDragActive },
+        "group relative flex cursor-pointer flex-col items-center justify-center rounded-lg border p-8 text-center transition-colors duration-200 ease-in-out", // Removed border-2, border-dashed, border-muted-foreground/30, bg-background/20
+        { "border-primary bg-accent": isDragActive }, // Replaced bg-primary/10 with bg-accent
         { "pointer-events-none opacity-50": disabled }
       )}
     >

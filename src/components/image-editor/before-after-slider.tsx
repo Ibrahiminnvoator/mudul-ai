@@ -29,7 +29,7 @@ export function BeforeAfterSlider({ before, after }: BeforeAfterSliderProps) {
     <ReactCompareSlider
       itemOne={before}
       itemTwo={after}
-      className="w-full h-auto max-h-[70vh] rounded-lg shadow-lg"
+      className="w-full h-auto max-h-[70vh] rounded-lg" // Removed shadow-lg
       dir="ltr" // Slider handle should always be LTR for intuitive dragging
     />
   )

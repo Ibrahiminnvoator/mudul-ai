@@ -33,12 +33,12 @@ export default function MainLayout({
 }) {
   return (
     <div className="flex min-h-screen flex-col bg-background">
-      <header className="sticky top-0 z-50 w-full border-b border-transparent bg-gradient-to-br from-indigo-600 via-purple-600 to-fuchsia-600 text-white shadow-sm dark:from-indigo-700 dark:via-purple-700 dark:to-fuchsia-700">
+      <header className="sticky top-0 z-50 w-full border-b border-border bg-card text-foreground">
         <div className="container flex h-16 items-center">
           <div className="flex flex-1 items-center justify-between">
             <h1
               className={cn(
-                "font-cairo text-2xl font-bold tracking-tight text-foreground",
+                "font-cairo text-2xl font-bold tracking-tight", // text-foreground is inherited from header
                 "md:text-3xl"
               )}
             >

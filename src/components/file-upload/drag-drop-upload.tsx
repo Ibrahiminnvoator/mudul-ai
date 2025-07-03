@@ -92,10 +92,10 @@ export default function DragDropUpload({
       role="button"
       aria-label="منطقة رفع الملفات، انقر أو اسحب ملفًا هنا"
       className={cn(
-        "relative w-full cursor-pointer rounded-xl border-2 border-dashed p-8 text-center transition-colors duration-200 ease-in-out",
-        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2",
-        isDragActive && "border-primary bg-primary/10",
-        displayError && "border-destructive bg-destructive/10",
+        "relative w-full cursor-pointer rounded-lg border p-8 text-center transition-colors duration-200 ease-in-out", // Replaced rounded-xl, border-2, border-dashed
+        "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring focus-visible:ring-offset-2", // Replaced ring-primary with ring-ring (uses var(--ring)) and ring-2 with ring-1
+        isDragActive && "border-primary bg-accent", // Replaced bg-primary/10 with bg-accent
+        displayError && "border-destructive bg-destructive/10", // Kept bg-destructive/10 for now
         isLoading && "cursor-not-allowed opacity-50"
       )}
     >

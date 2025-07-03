@@ -4,68 +4,67 @@
 
 @layer base {
   :root {
-    /* Light theme */
-    --background: 0 0% 100%;
-    --foreground: 240 10% 4%;
+    /* Light theme - Minimalist */
+    --background: 0 0% 98%; /* Slightly off-white */
+    --foreground: 240 10% 10%; /* Darker grey for better contrast */
 
-    --card: 0 0% 100%;
-    --card-foreground: 240 10% 4%;
+    --card: 0 0% 100%; /* White */
+    --card-foreground: 240 10% 10%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 240 10% 4%;
+    --popover-foreground: 240 10% 10%;
 
-    /* Primary brand – vibrant indigo → fuchsia gradient */
-    --primary: 258 90% 60%; /* indigo */
-    --primary-foreground: 0 0% 100%;
+    --primary: 220 60% 50%; /* Muted, calm blue */
+    --primary-foreground: 0 0% 100%; /* White text on primary */
 
-    --secondary: 296 85% 68%; /* fuchsia (lighter) */
-    --secondary-foreground: 0 0% 100%;
+    --secondary: 220 40% 70%; /* Lighter shade of the muted blue */
+    --secondary-foreground: 220 60% 20%; /* Darker blue text on secondary */
 
-    --muted: 220 14% 96%;
-    --muted-foreground: 220 10% 40%;
+    --muted: 220 20% 94%; /* Very light grey */
+    --muted-foreground: 220 10% 45%; /* Medium grey */
 
-    --accent: 292 85% 75%; /* lavender accent */
-    --accent-foreground: 258 90% 20%;
+    --accent: 220 60% 80%; /* Subtle accent, lighter shade of primary */
+    --accent-foreground: 220 60% 15%;
 
-    --destructive: 1 86% 58%;
+    --destructive: 0 70% 50%; /* Clear, but not overly harsh red */
     --destructive-foreground: 0 0% 100%;
 
-    --border: 220 13% 90%;
-    --input: 220 13% 90%;
-    --ring: 258 90% 60%;
+    --border: 220 10% 88%; /* Lighter, less prominent border */
+    --input: 220 10% 88%; /* Same as border for inputs */
+    --ring: 220 60% 70%; /* Focus ring, related to primary */
 
-    --radius: 0.5rem;
+    --radius: 0.375rem; /* Slightly smaller radius for a sharper look */
   }
 
   .dark {
-    /* Dark theme */
-    --background: 240 6% 10%;
-    --foreground: 0 0% 100%;
+    /* Dark theme - Minimalist */
+    --background: 240 10% 10%; /* Very dark grey, almost black */
+    --foreground: 0 0% 95%; /* Off-white/light grey */
 
-    --card: 240 5% 15%;
-    --card-foreground: 0 0% 100%;
+    --card: 240 8% 13%; /* Slightly lighter than background */
+    --card-foreground: 0 0% 95%;
 
-    --popover: 240 5% 15%;
-    --popover-foreground: 0 0% 100%;
+    --popover: 240 8% 13%;
+    --popover-foreground: 0 0% 95%;
 
-    --primary: 258 90% 60%;
+    --primary: 220 70% 60%; /* Muted blue, slightly brighter for dark mode contrast */
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 296 85% 68%;
-    --secondary-foreground: 0 0% 100%;
+    --secondary: 220 50% 40%; /* Darker shade of muted blue */
+    --secondary-foreground: 0 0% 90%;
 
-    --muted: 240 5% 20%;
-    --muted-foreground: 240 5% 70%;
+    --muted: 240 5% 18%; /* Dark grey */
+    --muted-foreground: 240 5% 65%; /* Lighter grey */
 
-    --accent: 292 85% 75%;
-    --accent-foreground: 292 85% 10%;
+    --accent: 220 70% 50%; /* Subtle accent for dark mode */
+    --accent-foreground: 0 0% 98%;
 
-    --destructive: 359 70% 48%;
+    --destructive: 0 60% 55%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 240 5% 20%;
-    --input: 240 5% 20%;
-    --ring: 258 90% 60%;
+    --border: 240 5% 25%; /* Subtle border for dark mode */
+    --input: 240 5% 25%;
+    --ring: 220 70% 70%;
   }
 }
 
