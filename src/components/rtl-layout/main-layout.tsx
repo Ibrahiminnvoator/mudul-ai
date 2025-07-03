@@ -1,6 +1,7 @@
 "use client"
 
 import React from "react"
+import ThemeToggle from "@/components/ui/theme-toggle"
 import { cn } from "@/lib/utils"
 
 /**
@@ -32,7 +33,7 @@ export default function MainLayout({
 }) {
   return (
     <div className="flex min-h-screen flex-col bg-background">
-      <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+      <header className="sticky top-0 z-50 w-full border-b border-transparent bg-gradient-to-br from-indigo-600 via-purple-600 to-fuchsia-600 text-white shadow-sm dark:from-indigo-700 dark:via-purple-700 dark:to-fuchsia-700">
         <div className="container flex h-16 items-center">
           <div className="flex flex-1 items-center justify-between">
             <h1
@@ -44,7 +45,7 @@ export default function MainLayout({
               مُعَدِّل
             </h1>
             <nav className="flex items-center space-x-4 rtl:space-x-reverse">
-              {/* Future navigation links can be added here */}
+              <ThemeToggle />
             </nav>
           </div>
         </div>

@@ -1,5 +1,3 @@
-"use server"
-
 import type { Metadata } from "next"
 import { Inter, Amiri, Cairo } from "next/font/google"
 import "./globals.css"

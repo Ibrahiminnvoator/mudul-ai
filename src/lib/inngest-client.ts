@@ -1,7 +1,4 @@
-"use server"
-
 import { Inngest } from "inngest"
-import { geminiClient } from "@/lib/gemini-client"
 /**
  * @description
  * This file configures the Inngest client and defines the background functions
@@ -41,7 +38,9 @@ export const processImageFunction = inngest.createFunction(
     // Use step.run to make the API call idempotent. Inngest will not re-run this
     // step on a retry if it has already completed successfully.
     const result = await step.run("call-gemini-api-with-retry", async () => {
-      // The geminiClient handles its own retry logic for API-specific errors like rate limits.
+      // Lazy-load the Gemini client so that the module (and its environment-variable check)
+      // is only evaluated when this step actually runs.
+      const { geminiClient } = await import("@/lib/gemini-client")
       return await geminiClient.editImageWithRetry(imageData, mimeType, prompt)
     })
 

@@ -1,5 +1,3 @@
-"use server"
-
 import { Suspense } from "react"
 import ImageEditor from "@/components/image-editor/image-editor"
 import MainLayout from "@/components/rtl-layout/main-layout"
